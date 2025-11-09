@@ -1,0 +1,13 @@
+# Security file for Raspberry Pi connection script
+.pi_security
+
+# PowerShell script history
+*.ps1-history
+
+# Windows specific
+Thumbs.db
+Desktop.ini
+
+
+
+

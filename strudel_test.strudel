@@ -1,0 +1,16 @@
+// Strudel Audio Test
+// Press Ctrl+Enter to play
+
+// Test 1: Simple drum pattern
+s("bd hh sd hh")
+
+// Test 2: Synth pattern
+note("c3 eb3 g3 c4 eb4 g4").s("sawtooth")
+
+// Test 3: More complex pattern
+stack(
+  s("bd sd").slow(2),
+  note("c3 e3 g3").s("sine").slow(4)
+)
+
+// Press Ctrl+Enter again to stop

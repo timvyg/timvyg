@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MindGlobe</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap');
+
+:root {
+  --bg: #0b0b0f;
+  --fg: #e8e8f0;
+  --dim: rgba(232,232,240,0.35);
+  --dimmer: rgba(232,232,240,0.12);
+  --border: rgba(232,232,240,0.14);
+  --border-bright: rgba(232,232,240,0.35);
+  --node: rgba(232,232,240,0.06);
+  --node-border: rgba(232,232,240,0.22);
+  --accent: rgba(232,232,240,0.9);
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { width:100%; height:100%; overflow:hidden; background:var(--bg); color:var(--fg); font-family:'DM Sans', sans-serif; cursor:crosshair; }
+
+#canvas { position:fixed; inset:0; z-index:0; }
+
+/* ── HEADER ── */
+#header {
+  position:fixed; top:0; left:0; right:0; z-index:20;
+  display:flex; align-items:center; justify-content:space-between;
+  padding:20px 28px;
+  background:linear-gradient(to bottom, rgba(11,11,15,0.95) 60%, transparent);
+  pointer-events:none;
+}
+#logo {
+  font-family:'DM Mono', monospace;
+  font-size:13px; font-weight:500;
+  letter-spacing:4px;
+  color:var(--fg);
+  opacity:0.8;
+}
+#logo span { opacity:0.3; font-weight:300; }
+#node-count {
+  font-family:'DM Mono', monospace;
+  font-size:11px; letter-spacing:2px;
+  color:var(--dim);
+}
+
+/* ── ADD BUTTON ── */
+#add-btn {
+  position:fixed; bottom:32px; right:32px; z-index:30;
+  width:48px; height:48px; border-radius:50%;
+  border:1px solid var(--border-bright);
+  background:rgba(11,11,15,0.85);
+  color:var(--fg); font-size:22px;
+  cursor:pointer; pointer-events:all;
+  display:flex; align-items:center; justify-content:center;
+  transition:all 0.2s;
+  backdrop-filter:blur(12px);
+}
+#add-btn:hover { background:rgba(232,232,240,0.08); border-color:var(--fg); }
+
+/* ── ADD PANEL ── */
+#add-panel {
+  position:fixed; bottom:92px; right:32px; z-index:30;
+  width:280px;
+  background:rgba(11,11,15,0.92);
+  border:1px solid var(--border-bright);
+  border-radius:4px;
+  padding:22px;
+  backdrop-filter:blur(24px);
+  display:none;
+  animation:fadeUp 0.18s ease;
+}
+@keyframes fadeUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+
+#add-panel h3 {
+  font-family:'DM Mono', monospace;
+  font-size:10px; letter-spacing:3px;
+  color:var(--dim); margin-bottom:18px;
+}
+.field { margin-bottom:13px; }
+.field label { display:block; font-family:'DM Mono', monospace; font-size:9px; letter-spacing:2px; color:var(--dimmer); margin-bottom:5px; }
+.field input, .field select, .field textarea {
+  width:100%;
+  background:rgba(232,232,240,0.04);
+  border:1px solid var(--border);
+  border-radius:2px;
+  color:var(--fg);
+  font-family:'DM Mono', monospace;
+  font-size:11px;
+  padding:8px 10px;
+  outline:none;
+  transition:border-color 0.15s;
+  resize:none;
+}
+.field input:focus, .field select:focus, .field textarea:focus { border-color:var(--border-bright); }
+.field select option { background:#0b0b0f; }
+
+/* parent selector */
+#parent-select { font-size:10px; }
+
+.form-row { display:flex; gap:10px; }
+.form-row .field { flex:1; }
+
+#submit-btn {
+  width:100%; margin-top:4px;
+  background:rgba(232,232,240,0.06);
+  border:1px solid var(--border-bright);
+  border-radius:2px;
+  color:var(--fg);
+  font-family:'DM Mono', monospace;
+  font-size:10px; letter-spacing:3px;
+  padding:10px;
+  cursor:pointer;
+  transition:all 0.15s;
+}
+#submit-btn:hover { background:rgba(232,232,240,0.1); }
+
+/* ── DETAIL PANEL ── */
+#detail {
+  position:fixed; top:50%; left:28px;
+  transform:translateY(-50%);
+  z-index:30; width:230px;
+  background:rgba(11,11,15,0.9);
+  border:1px solid var(--border);
+  border-radius:4px;
+  padding:20px;
+  backdrop-filter:blur(20px);
+  display:none;
+  animation:fadeIn 0.18s ease;
+}
+@keyframes fadeIn { from{opacity:0} to{opacity:1} }
+
+#detail .d-tag { font-family:'DM Mono', monospace; font-size:9px; letter-spacing:2px; color:var(--dim); margin-bottom:8px; }
+#detail .d-title { font-size:15px; font-weight:500; line-height:1.3; margin-bottom:12px; }
+#detail .d-body { font-size:12px; color:var(--dim); line-height:1.6; margin-bottom:14px; }
+#detail .d-parent { font-family:'DM Mono', monospace; font-size:9px; color:var(--dimmer); margin-bottom:14px; }
+#detail .d-actions { display:flex; gap:8px; }
+.d-btn {
+  flex:1; background:transparent;
+  border:1px solid var(--border);
+  border-radius:2px; color:var(--dim);
+  font-family:'DM Mono', monospace;
+  font-size:9px; letter-spacing:1px;
+  padding:7px; cursor:pointer;
+  transition:all 0.15s;
+}
+.d-btn:hover { border-color:var(--border-bright); color:var(--fg); }
+.d-btn.danger:hover { border-color:rgba(232,232,240,0.5); color:var(--fg); }
+
+/* ── HINT ── */
+#hint {
+  position:fixed; bottom:32px; left:50%;
+  transform:translateX(-50%);
+  font-family:'DM Mono', monospace;
+  font-size:9px; letter-spacing:2px;
+  color:rgba(232,232,240,0.2);
+  z-index:20; pointer-events:none;
+  animation:hintFade 4s ease 3s forwards;
+  opacity:1;
+}
+@keyframes hintFade { to{opacity:0} }
+
+/* ── LEGEND ── */
+#legend {
+  position:fixed; top:50%; right:28px;
+  transform:translateY(-50%);
+  z-index:20; pointer-events:none;
+  display:flex; flex-direction:column; gap:8px;
+}
+.leg { font-family:'DM Mono', monospace; font-size:9px; letter-spacing:1px; color:rgba(232,232,240,0.25); display:flex; align-items:center; gap:8px; }
+.leg-line { width:18px; height:1px; }
+</style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+<div id="header">
+  <div id="logo">MIND<span>GLOBE</span></div>
+  <div id="node-count">0 NODES</div>
+</div>
+
+<div id="legend">
+  <div class="leg"><div class="leg-line" style="background:rgba(232,232,240,0.6)"></div>ROOT</div>
+  <div class="leg"><div class="leg-line" style="background:rgba(232,232,240,0.3);border-top:1px dashed rgba(232,232,240,0.3);height:0"></div>CHILD</div>
+  <div class="leg"><div class="leg-line" style="background:rgba(232,232,240,0.15);border-top:1px dotted rgba(232,232,240,0.15);height:0"></div>LEAF</div>
+</div>
+
+<div id="detail">
+  <div class="d-tag" id="d-tag">NODE</div>
+  <div class="d-title" id="d-title"></div>
+  <div class="d-body" id="d-body"></div>
+  <div class="d-parent" id="d-parent"></div>
+  <div class="d-actions">
+    <button class="d-btn" id="d-child-btn">+ CHILD</button>
+    <button class="d-btn danger" id="d-delete-btn">DELETE</button>
+    <button class="d-btn" id="d-close-btn">CLOSE</button>
+  </div>
+</div>
+
+<div id="add-panel">
+  <h3>NEW NODE</h3>
+  <div class="field">
+    <label>TITLE</label>
+    <input type="text" id="f-title" placeholder="Node title..." maxlength="40">
+  </div>
+  <div class="field">
+    <label>NOTE</label>
+    <textarea id="f-body" rows="2" placeholder="Details..."></textarea>
+  </div>
+  <div class="form-row">
+    <div class="field">
+      <label>TYPE</label>
+      <select id="f-type">
+        <option value="idea">IDEA</option>
+        <option value="task">TASK</option>
+        <option value="ref">REF</option>
+        <option value="block">BLOCK</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>PARENT</label>
+      <select id="f-parent"><option value="">— ROOT —</option></select>
+    </div>
+  </div>
+  <button id="submit-btn">PLACE NODE →</button>
+</div>
+
+<button id="add-btn" title="Add node">+</button>
+<div id="hint">DRAG · SCROLL · CLICK NODE</div>
+
+<script>
+// ═══════════════════════════════════════
+// DATA
+// ═══════════════════════════════════════
+let nodes = [
+  { id:1, title:'Product Roadmap', body:'Core vision and milestones', type:'idea', parentId:null },
+  { id:2, title:'Q1 Launch', body:'March release targets', type:'task', parentId:1 },
+  { id:3, title:'User Research', body:'Interviews & synthesis', type:'ref', parentId:1 },
+  { id:4, title:'Auth System', body:'OAuth + session mgmt', type:'task', parentId:2 },
+  { id:5, title:'API Gateway', body:'Rate limiting, routing', type:'task', parentId:2 },
+  { id:6, title:'Design System', body:'Tokens, components, docs', type:'idea', parentId:3 },
+  { id:7, title:'Onboarding Flow', body:'First-run experience', type:'task', parentId:3 },
+  { id:8, title:'Perf Audit', body:'Core Web Vitals pass', type:'block', parentId:5 },
+  { id:9, title:'Dark Mode', body:'Token-based theming', type:'idea', parentId:6 },
+  { id:10, title:'Mobile Layout', body:'Responsive breakpoints', type:'task', parentId:7 },
+];
+let nextId = 11;
+let selected = null;
+let pendingParentId = null; // for "add child" from detail
+
+// ═══════════════════════════════════════
+// THREE.JS SETUP
+// ═══════════════════════════════════════
+const canvas = document.getElementById('canvas');
+const W = window.innerWidth, H = window.innerHeight;
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:true });
+renderer.setSize(W, H);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setClearColor(0x0b0b0f, 1);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(52, W/H, 0.1, 400);
+camera.position.set(0, 2, 18);
+camera.lookAt(0, 0, 0);
+
+// Lighting — stark, directional, monochromatic
+scene.add(new THREE.AmbientLight(0xffffff, 0.25));
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+dirLight.position.set(4, 8, 6);
+scene.add(dirLight);
+const rimLight = new THREE.DirectionalLight(0xffffff, 0.2);
+rimLight.position.set(-6, -4, -8);
+scene.add(rimLight);
+
+// ═══════════════════════════════════════
+// BACKGROUND — sparse star field
+// ═══════════════════════════════════════
+(function buildStars() {
+  const geo = new THREE.BufferGeometry();
+  const pos = [];
+  for (let i=0; i<600; i++) {
+    const r = 50 + Math.random()*100;
+    const th = Math.random()*Math.PI*2;
+    const ph = Math.acos(2*Math.random()-1);
+    pos.push(r*Math.sin(ph)*Math.cos(th), r*Math.cos(ph), r*Math.sin(ph)*Math.sin(th));
+  }
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  scene.add(new THREE.Points(geo, new THREE.PointsMaterial({ color:0xffffff, size:0.08, transparent:true, opacity:0.25 })));
+})();
+
+// ═══════════════════════════════════════
+// SPHERE — transparent wireframe ghost
+// ═══════════════════════════════════════
+const GLOBE_R = 5.0;
+
+// Inner volume (very faint)
+const sphereVolume = new THREE.Mesh(
+  new THREE.SphereGeometry(GLOBE_R, 48, 48),
+  new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:0.015, side:THREE.FrontSide, depthWrite:false })
+);
+scene.add(sphereVolume);
+
+// Latitude / longitude wireframe
+const sphereWire = new THREE.Mesh(
+  new THREE.SphereGeometry(GLOBE_R, 20, 14),
+  new THREE.MeshBasicMaterial({ color:0xffffff, wireframe:true, transparent:true, opacity:0.055 })
+);
+scene.add(sphereWire);
+
+// Outer halo
+const sphereHalo = new THREE.Mesh(
+  new THREE.SphereGeometry(GLOBE_R + 0.5, 32, 32),
+  new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:0.018, side:THREE.BackSide, depthWrite:false })
+);
+scene.add(sphereHalo);
+
+// ═══════════════════════════════════════
+// NODE PLACEMENT ON SPHERE
+// ═══════════════════════════════════════
+// Deterministic positions keyed by node id
+const nodePositions = {}; // id -> {x,y,z} on sphere surface
+
+function goldenPos(index, total) {
+  const phi = Math.acos(1 - 2*(index+0.5)/total);
+  const theta = Math.PI*(1+Math.sqrt(5))*index;
+  return {
+    x: GLOBE_R * Math.sin(phi)*Math.cos(theta),
+    y: GLOBE_R * Math.cos(phi),
+    z: GLOBE_R * Math.sin(phi)*Math.sin(theta),
+  };
+}
+
+function assignPositions() {
+  nodes.forEach((node, i) => {
+    if (!nodePositions[node.id]) {
+      // small jitter per id for stability across adds
+      const seed = (node.id * 2654435761) % nodes.length || i;
+      const pos = goldenPos(i, Math.max(nodes.length, 8));
+      nodePositions[node.id] = pos;
+    }
+  });
+}
+
+// ═══════════════════════════════════════
+// 3D SCENE OBJECTS
+// ═══════════════════════════════════════
+const sceneGroup = new THREE.Group();
+scene.add(sceneGroup);
+
+let nodeMeshes = []; // {mesh, node, ring}
+let connectionLines = []; // THREE.Line
+let labelSprites = []; // {sprite, node}
+
+// opacity levels by depth
+function nodeDepth(node) {
+  if (!node.parentId) return 0;
+  const parent = nodes.find(n=>n.id===node.parentId);
+  return parent ? nodeDepth(parent)+1 : 1;
+}
+
+function opacityForDepth(d) {
+  return [0.9, 0.65, 0.45, 0.32][Math.min(d,3)];
+}
+
+function borderOpacityForDepth(d) {
+  return [0.7, 0.5, 0.35, 0.24][Math.min(d,3)];
+}
+
+// Create a canvas texture for the note label
+function makeLabel(node) {
+  const depth = nodeDepth(node);
+  const cw = 256, ch = 200;
+  const c = document.createElement('canvas');
+  c.width = cw; c.height = ch;
+  const ctx = c.getContext('2d');
+
+  // Glass fill
+  ctx.clearRect(0,0,cw,ch);
+  const alpha = opacityForDepth(depth);
+
+  // Background fill — very subtle
+  ctx.fillStyle = `rgba(232,232,240,${0.04 * alpha})`;
+  ctx.fillRect(0,0,cw,ch);
+
+  // Border
+  ctx.strokeStyle = `rgba(232,232,240,${borderOpacityForDepth(depth)})`;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(1,1,cw-2,ch-2);
+
+  // Corner ticks
+  const tk = 18;
+  ctx.strokeStyle = `rgba(232,232,240,${alpha*0.6})`;
+  ctx.lineWidth = 1.5;
+  [[0,0],[cw,0],[0,ch],[cw,ch]].forEach(([cx,cy]) => {
+    const sx = cx===0?1:cw-1, sy = cy===0?1:ch-1;
+    const dx = cx===0?tk:-tk, dy = cy===0?tk:-tk;
+    ctx.beginPath(); ctx.moveTo(sx+dx, sy); ctx.lineTo(sx, sy); ctx.lineTo(sx, sy+dy); ctx.stroke();
+  });
+
+  // Type tag
+  const typeColors = { idea:'0.9', task:'0.55', ref:'0.4', block:'0.35' };
+  ctx.font = '500 18px "DM Mono", monospace';
+  ctx.fillStyle = `rgba(232,232,240,${typeColors[node.type]||'0.5'})`;
+  ctx.fillText(node.type.toUpperCase(), 14, 30);
+
+  // Ruled lines
+  [70,90,110,130].forEach(y=>{
+    ctx.beginPath();
+    ctx.strokeStyle=`rgba(232,232,240,0.08)`;
+    ctx.lineWidth=1;
+    ctx.moveTo(14,y); ctx.lineTo(cw-14,y); ctx.stroke();
+  });
+
+  // Title
+  ctx.font = '500 22px "DM Sans", sans-serif';
+  ctx.fillStyle = `rgba(232,232,240,${alpha})`;
+  // word-wrap title
+  const words = node.title.split(' ');
+  let line='', lines=[], lineH=28;
+  words.forEach(w=>{
+    const test = line+w+' ';
+    if (ctx.measureText(test).width > cw-28 && line) { lines.push(line.trim()); line=w+' '; }
+    else line=test;
+  });
+  lines.push(line.trim());
+  lines.slice(0,3).forEach((l,i)=> ctx.fillText(l, 14, 68 + i*lineH));
+
+  // Body (small)
+  if (node.body) {
+    ctx.font = '300 16px "DM Sans", sans-serif';
+    ctx.fillStyle = `rgba(232,232,240,${alpha*0.5})`;
+    ctx.fillText(node.body.slice(0,38)+(node.body.length>38?'…':''), 14, ch-20);
+  }
+
+  const tex = new THREE.CanvasTexture(c);
+  return tex;
+}
+
+function buildSceneObjects() {
+  // clear
+  nodeMeshes.forEach(n=>sceneGroup.remove(n.mesh));
+  connectionLines.forEach(l=>sceneGroup.remove(l));
+  nodeMeshes=[];
+  connectionLines=[];
+
+  assignPositions();
+
+  // Draw connection lines first (behind notes)
+  nodes.forEach(node => {
+    if (!node.parentId) return;
+    const parent = nodes.find(n=>n.id===node.parentId);
+    if (!parent) return;
+    const pPos = nodePositions[parent.id];
+    const nPos = nodePositions[node.id];
+    if (!pPos || !nPos) return;
+
+    const depth = nodeDepth(node);
+    const op = [0.55, 0.35, 0.22, 0.14][Math.min(depth,3)];
+
+    // Bezier curve through globe center-ish for flow feel
+    const mid = new THREE.Vector3(
+      (pPos.x+nPos.x)*0.2,
+      (pPos.y+nPos.y)*0.2,
+      (pPos.z+nPos.z)*0.2
+    );
+    const curve = new THREE.QuadraticBezierCurve3(
+      new THREE.Vector3(pPos.x, pPos.y, pPos.z),
+      mid,
+      new THREE.Vector3(nPos.x, nPos.y, nPos.z)
+    );
+    const pts = curve.getPoints(40);
+    const geo = new THREE.BufferGeometry().setFromPoints(pts);
+
+    // dashed look via opacity variation baked in segments — use solid line, fade
+    const mat = new THREE.LineBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: op,
+    });
+    const line = new THREE.Line(geo, mat);
+    line.userData.baseOpacity = op;
+    sceneGroup.add(line);
+    connectionLines.push(line);
+  });
+
+  // Draw node cards
+  nodes.forEach((node, idx) => {
+    const pos = nodePositions[node.id];
+    if (!pos) return;
+
+    const depth = nodeDepth(node);
+    const isRoot = depth===0;
+    const scale = isRoot ? 1.15 : depth===1 ? 0.95 : 0.80;
+
+    // Plane for the note
+    const geo = new THREE.PlaneGeometry(2.2 * scale, 1.7 * scale);
+    const tex = makeLabel(node);
+    const mat = new THREE.MeshBasicMaterial({
+      map: tex,
+      transparent: true,
+      opacity: opacityForDepth(depth),
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(pos.x, pos.y, pos.z);
+
+    // Face outward from globe
+    mesh.lookAt(0, 0, 0);
+    mesh.rotateY(Math.PI);
+
+    // Slight random tilt for organic feel
+    const tiltSeed = node.id * 7.3;
+    mesh.rotateZ(Math.sin(tiltSeed) * 0.12);
+
+    mesh.userData = { node, depth, tex, mat };
+    sceneGroup.add(mesh);
+    nodeMeshes.push({ mesh, node });
+  });
+
+  updateNodeCount();
+  updateParentSelect();
+}
+
+function updateNodeCount() {
+  document.getElementById('node-count').textContent = `${nodes.length} NODE${nodes.length!==1?'S':''}`;
+}
+
+function updateParentSelect() {
+  const sel = document.getElementById('f-parent');
+  sel.innerHTML = '<option value="">— ROOT —</option>';
+  nodes.forEach(n => {
+    const opt = document.createElement('option');
+    opt.value = n.id;
+    opt.textContent = n.title.slice(0,28);
+    sel.appendChild(opt);
+  });
+}
+
+buildSceneObjects();
+
+// ═══════════════════════════════════════
+// RAYCASTING — click to select
+// ═══════════════════════════════════════
+const raycaster = new THREE.Raycaster();
+const mouse2 = new THREE.Vector2();
+
+renderer.domElement.addEventListener('click', e => {
+  if (wasDragging) return;
+  mouse2.x = (e.clientX/W)*2-1;
+  mouse2.y = -(e.clientY/H)*2+1;
+  raycaster.setFromCamera(mouse2, camera);
+  const hits = raycaster.intersectObjects(nodeMeshes.map(n=>n.mesh));
+  if (hits.length>0) {
+    const hit = nodeMeshes.find(n=>n.mesh===hits[0].object);
+    if (hit) selectNode(hit.node);
+  } else {
+    deselectNode();
+  }
+});
+
+function selectNode(node) {
+  selected = node;
+  const parent = nodes.find(n=>n.id===node.parentId);
+  document.getElementById('d-tag').textContent = node.type.toUpperCase();
+  document.getElementById('d-title').textContent = node.title;
+  document.getElementById('d-body').textContent = node.body || '—';
+  document.getElementById('d-parent').textContent = parent ? `↳ ${parent.title}` : '↳ ROOT NODE';
+  document.getElementById('detail').style.display = 'block';
+  // pulse selected node
+  const nm = nodeMeshes.find(n=>n.node.id===node.id);
+  if (nm) { nm._pulse = true; }
+}
+
+function deselectNode() {
+  selected = null;
+  document.getElementById('detail').style.display = 'none';
+  nodeMeshes.forEach(n=>{ n._pulse=false; if(n.mesh.userData.mat) n.mesh.userData.mat.opacity=opacityForDepth(n.mesh.userData.depth); });
+}
+
+// ═══════════════════════════════════════
+// DETAIL ACTIONS
+// ═══════════════════════════════════════
+document.getElementById('d-close-btn').onclick = deselectNode;
+
+document.getElementById('d-delete-btn').onclick = () => {
+  if (!selected) return;
+  // Remove node and its children recursively
+  function removeSubtree(id) {
+    nodes = nodes.filter(n=>n.id!==id);
+    delete nodePositions[id];
+    nodes.filter(n=>n.parentId===id).forEach(n=>removeSubtree(n.id));
+  }
+  removeSubtree(selected.id);
+  deselectNode();
+  buildSceneObjects();
+};
+
+document.getElementById('d-child-btn').onclick = () => {
+  if (!selected) return;
+  pendingParentId = selected.id;
+  document.getElementById('f-parent').value = selected.id;
+  openAddPanel();
+};
+
+// ═══════════════════════════════════════
+// ADD NODE
+// ═══════════════════════════════════════
+const addBtn = document.getElementById('add-btn');
+const addPanel = document.getElementById('add-panel');
+let panelOpen = false;
+
+function openAddPanel() {
+  panelOpen = true;
+  addPanel.style.display = 'block';
+  addBtn.textContent = '×';
+  document.getElementById('f-title').focus();
+}
+function closeAddPanel() {
+  panelOpen = false;
+  addPanel.style.display = 'none';
+  addBtn.textContent = '+';
+  pendingParentId = null;
+  document.getElementById('f-parent').value = '';
+}
+
+addBtn.onclick = () => { panelOpen ? closeAddPanel() : openAddPanel(); };
+
+document.getElementById('submit-btn').onclick = () => {
+  const title = document.getElementById('f-title').value.trim();
+  if (!title) { document.getElementById('f-title').focus(); return; }
+  const body = document.getElementById('f-body').value.trim();
+  const type = document.getElementById('f-type').value;
+  const parentVal = document.getElementById('f-parent').value;
+  const parentId = parentVal ? parseInt(parentVal) : null;
+
+  const node = { id:nextId++, title, body, type, parentId };
+  nodes.push(node);
+
+  // Place near parent if has one
+  if (parentId && nodePositions[parentId]) {
+    const pp = nodePositions[parentId];
+    // slightly offset from parent on sphere surface
+    const jitter = 0.8;
+    const raw = {
+      x: pp.x + (Math.random()-0.5)*jitter*2,
+      y: pp.y + (Math.random()-0.5)*jitter*2,
+      z: pp.z + (Math.random()-0.5)*jitter*2,
+    };
+    const len = Math.sqrt(raw.x**2+raw.y**2+raw.z**2);
+    nodePositions[node.id] = { x:raw.x/len*GLOBE_R, y:raw.y/len*GLOBE_R, z:raw.z/len*GLOBE_R };
+  }
+
+  // Reset form
+  document.getElementById('f-title').value = '';
+  document.getElementById('f-body').value = '';
+  document.getElementById('f-type').value = 'task';
+
+  closeAddPanel();
+  buildSceneObjects();
+  // auto-select new node
+  setTimeout(()=>selectNode(node), 50);
+};
+
+// ═══════════════════════════════════════
+// ORBIT CONTROLS
+// ═══════════════════════════════════════
+let drag=false, wasDragging=false, lastX=0, lastY=0;
+let rotY=0, rotX=0.15, tgtY=0, tgtX=0.15;
+let zoom=18, tgtZoom=18;
+let autoRotate=true;
+
+renderer.domElement.addEventListener('mousedown', e => {
+  drag=true; wasDragging=false; autoRotate=false;
+  lastX=e.clientX; lastY=e.clientY;
+});
+window.addEventListener('mousemove', e => {
+  if (!drag) return;
+  const dx=e.clientX-lastX, dy=e.clientY-lastY;
+  if (Math.abs(dx)+Math.abs(dy)>2) wasDragging=true;
+  tgtY += dx*0.006;
+  tgtX = Math.max(-1.1, Math.min(1.1, tgtX+dy*0.004));
+  lastX=e.clientX; lastY=e.clientY;
+});
+window.addEventListener('mouseup', ()=>{ drag=false; });
+window.addEventListener('wheel', e=>{
+  tgtZoom = Math.max(9, Math.min(30, tgtZoom+e.deltaY*0.016));
+}, { passive:true });
+
+// Touch
+renderer.domElement.addEventListener('touchstart', e=>{
+  drag=true; wasDragging=false; autoRotate=false;
+  lastX=e.touches[0].clientX; lastY=e.touches[0].clientY;
+}, { passive:true });
+renderer.domElement.addEventListener('touchmove', e=>{
+  if(!drag)return;
+  tgtY+=(e.touches[0].clientX-lastX)*0.006;
+  tgtX=Math.max(-1.1,Math.min(1.1,tgtX+(e.touches[0].clientY-lastY)*0.004));
+  lastX=e.touches[0].clientX; lastY=e.touches[0].clientY;
+}, { passive:true });
+renderer.domElement.addEventListener('touchend',()=>{ drag=false; });
+
+// ═══════════════════════════════════════
+// ANIMATE
+// ═══════════════════════════════════════
+let t=0;
+function animate() {
+  requestAnimationFrame(animate);
+  t += 0.005;
+
+  if (autoRotate) tgtY += 0.0015;
+
+  rotY += (tgtY-rotY)*0.05;
+  rotX += (tgtX-rotX)*0.05;
+  zoom += (tgtZoom-zoom)*0.05;
+
+  camera.position.x = zoom*Math.sin(rotY)*Math.cos(rotX);
+  camera.position.y = zoom*Math.sin(rotX)+1.5;
+  camera.position.z = zoom*Math.cos(rotY)*Math.cos(rotX);
+  camera.lookAt(0,0,0);
+
+  // Wireframe sphere breathes
+  sphereWire.material.opacity = 0.04 + Math.sin(t*0.6)*0.015;
+
+  // Connection line pulse
+  connectionLines.forEach((line, i) => {
+    line.material.opacity = line.userData.baseOpacity * (0.75 + Math.sin(t*1.2+i*0.5)*0.25);
+  });
+
+  // Note cards face camera (billboard) — no, keep globe-facing but subtle tilt toward camera
+  nodeMeshes.forEach(({mesh, node, _pulse}, i) => {
+    // Gentle float
+    const pos = nodePositions[node.id];
+    if (!pos) return;
+    const floatY = Math.sin(t*0.8 + node.id*1.1)*0.04;
+    mesh.position.y = pos.y + floatY;
+
+    // If selected, pulse opacity
+    if (selected && selected.id===node.id) {
+      mesh.userData.mat.opacity = opacityForDepth(mesh.userData.depth)*( 0.85 + Math.sin(t*3)*0.15 );
+    }
+  });
+
+  renderer.render(scene, camera);
+}
+animate();
+
+// Resize
+window.addEventListener('resize', ()=>{
+  const w=window.innerWidth, h=window.innerHeight;
+  camera.aspect=w/h; camera.updateProjectionMatrix();
+  renderer.setSize(w,h);
+});
+</script>
+</body>
+</html>
